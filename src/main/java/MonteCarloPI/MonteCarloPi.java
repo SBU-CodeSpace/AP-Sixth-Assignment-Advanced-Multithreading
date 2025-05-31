@@ -1,8 +1,10 @@
 package MonteCarloPI;
 
-import java.util.concurrent.ExecutionException;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class MonteCarloPi {
 
@@ -25,31 +27,73 @@ public class MonteCarloPi {
         endTime = System.nanoTime();
         System.out.println("Monte Carlo Pi Approximation (Multi-threaded): " + piWithThreads);
         System.out.println("Time taken (Multi-threaded): " + (endTime - startTime) / 1_000_000 + " ms");
-
-        // TODO: After completing the implementation, reflect on the questions in the description of this task in the README file
-        //       and include your answers in your report file.
     }
 
     // Monte Carlo Pi Approximation without threads
     public static double estimatePiWithoutThreads(long numPoints)
     {
-        // TODO: Implement this method to calculate Pi using a single thread
-        return 0;
+        Random random = new Random();
+        long pointsInsideCircle = 0;
+
+        for (long i = 0; i < numPoints; i++) {
+            double x = random.nextDouble() * 2 - 1; // x in [-1, 1]
+            double y = random.nextDouble() * 2 - 1; // y in [-1, 1]
+            if (x * x + y * y <= 1) { // Inside circle
+                pointsInsideCircle++;
+            }
+        }
+
+        return 4.0 * pointsInsideCircle / numPoints;
     }
 
     // Monte Carlo Pi Approximation with threads
-    public static double estimatePiWithThreads(long numPoints, int numThreads) throws InterruptedException, ExecutionException
-    {
-        // TODO: Implement this method to calculate Pi using multiple threads
+    public static double estimatePiWithThreads(long numPoints, int numThreads) throws InterruptedException {
+        AtomicLong pointsInsideCircle = new AtomicLong(0);
+        Thread[] threads = new Thread[numThreads];
+        long pointsPerThread = numPoints / numThreads;
+        long remainingPoints = numPoints % numThreads;
 
-        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        // Distribute points among threads using try-with-resources
+        try (ExecutorService executor = Executors.newFixedThreadPool(numThreads)) {
+            for (int i = 0; i < numThreads; i++) {
+                long pointsForThisThread = pointsPerThread + (i == 0 ? remainingPoints : 0);
+                threads[i] = new Thread(new PiTask(pointsForThisThread, pointsInsideCircle));
+                executor.execute(threads[i]); // Use executor to manage threads
+            }
 
-        // HINT: You may need to create a variable to *safely* keep track of points that fall inside the circle
-        // HINT: Each thread should generate and process a subset of the total points
+            // Wait for all threads to complete
+            for (Thread thread : threads) {
+                thread.join();
+            }
+        } // ExecutorService automatically shuts down here
 
-        // TODO: After submitting all tasks, shut down the executor to prevent new tasks
-        // TODO: wait for the executor to be fully terminated
-        // TODO: Calculate and return the final estimation of Pi
-        return 0;
+        return 4.0 * pointsInsideCircle.get() / numPoints;
+    }
+
+    // Task for each thread
+    private static class PiTask implements Runnable {
+        private final long numPoints;
+        private final AtomicLong pointsInsideCircle;
+
+        public PiTask(long numPoints, AtomicLong pointsInsideCircle) {
+            this.numPoints = numPoints;
+            this.pointsInsideCircle = pointsInsideCircle;
+        }
+
+        @Override
+        public void run() {
+            Random random = new Random();
+            long localCount = 0;
+
+            for (long i = 0; i < numPoints; i++) {
+                double x = random.nextDouble() * 2 - 1;
+                double y = random.nextDouble() * 2 - 1;
+                if (x * x + y * y <= 1) {
+                    localCount++;
+                }
+            }
+
+            pointsInsideCircle.addAndGet(localCount);
+        }
     }
 }
